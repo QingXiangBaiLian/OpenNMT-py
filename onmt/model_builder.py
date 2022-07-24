@@ -177,14 +177,20 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
             gen_func = onmt.modules.sparse_activations.LogSparsemax(dim=-1)
         else:
             gen_func = nn.LogSoftmax(dim=-1)
-        generator = nn.Sequential(
-            nn.Linear(model_opt.dec_rnn_size,
-                      len(fields["tgt"].base_field.vocab)),
+        if model_opt.decoder_type in {"prnn", "sprnn"}:
+            generator = nn.Sequential(
             Cast(torch.float32),
             gen_func
-        )
-        if model_opt.share_decoder_embeddings:
-            generator[0].weight = decoder.embeddings.word_lut.weight
+            )
+        else:
+            generator = nn.Sequential(
+                nn.Linear(model_opt.dec_rnn_size,
+                        len(fields["tgt"].base_field.vocab)),
+                Cast(torch.float32),
+                gen_func
+            )
+            if model_opt.share_decoder_embeddings:
+                generator[0].weight = decoder.embeddings.word_lut.weight
     else:
         tgt_base_field = fields["tgt"].base_field
         vocab_size = len(tgt_base_field.vocab)

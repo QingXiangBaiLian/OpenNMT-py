@@ -438,3 +438,179 @@ class InputFeedRNNDecoder(RNNDecoderBase):
         self.dropout.p = dropout
         self.rnn.dropout.p = dropout
         self.embeddings.update_dropout(dropout)
+
+
+class PoincareRNNDecoder(InputFeedRNNDecoder):
+
+    def __init__(self, rnn_type, bidirectional_encoder, num_layers, hidden_size, attn_type="general", attn_func="softmax", coverage_attn=False, context_gate=None, copy_attn=False, dropout=0, embeddings=None, reuse_copy_attn=False, copy_attn_type="general"):
+        super().__init__(rnn_type, bidirectional_encoder, num_layers, hidden_size, attn_type, attn_func, coverage_attn, context_gate, copy_attn, dropout, embeddings, reuse_copy_attn, copy_attn_type)
+        self.poincare_map = PoincareReparametrize(self.hidden_size, self.embeddings.word_lut.weight.shape[1])
+        self.poincare_emb_map = PoincareReparametrize(self.embeddings.word_lut.weight.shape[1], self.embeddings.word_lut.weight.shape[1])
+        self.context_window = 6
+
+    def _run_forward_pass(self, tgt, memory_bank, memory_lengths=None):
+        """
+        See StdRNNDecoder._run_forward_pass() for description
+        of arguments and return values.
+        """
+        # Additional args check.
+        input_feed = self.state["input_feed"].squeeze(0)
+        input_feed_batch, _ = input_feed.size()
+        _, tgt_batch, _ = tgt.size()
+        aeq(tgt_batch, input_feed_batch)
+        # END Additional args check.
+
+        dec_outs = []
+        attns = {}
+        if self.attn is not None:
+            attns["std"] = []
+        if self.copy_attn is not None or self._reuse_copy_attn:
+            attns["copy"] = []
+        if self._coverage:
+            attns["coverage"] = []
+
+        emb = self.embeddings(tgt)
+        assert emb.dim() == 3  # len x batch x embedding_dim
+
+        dec_state = self.state["hidden"]
+        coverage = self.state["coverage"].squeeze(0) \
+            if self.state["coverage"] is not None else None
+
+        # Input feed concatenates hidden state with
+        # input at every time step.
+        for emb_t in emb.split(1):
+            decoder_input = torch.cat([emb_t.squeeze(0), input_feed], 1)
+            rnn_output, dec_state = self.rnn(decoder_input, dec_state)
+            if self.attentional:
+                decoder_output, p_attn = self.attn(
+                    rnn_output,
+                    memory_bank.transpose(0, 1),
+                    memory_lengths=memory_lengths)
+                attns["std"].append(p_attn)
+            else:
+                decoder_output = rnn_output
+            if self.context_gate is not None:
+                # TODO: context gate should be employed
+                # instead of second RNN transform.
+                decoder_output = self.context_gate(
+                    decoder_input, rnn_output, decoder_output
+                )
+            decoder_output = self.dropout(decoder_output)
+            input_feed = decoder_output
+
+            # Update the coverage attention.
+            if self._coverage:
+                coverage = p_attn if coverage is None else p_attn + coverage
+                attns["coverage"] += [coverage]
+
+            if self.copy_attn is not None:
+                _, copy_attn = self.copy_attn(
+                    decoder_output, memory_bank.transpose(0, 1))
+                attns["copy"] += [copy_attn]
+            elif self._reuse_copy_attn:
+                attns["copy"] = attns["std"]
+            
+            poincare_decoding = self.poincare_map(decoder_output)
+            poincare_embedding =  self.poincare_emb_map(self.embeddings.word_lut.weight)
+            
+            dec_outs += [self.poincare_dist(poincare_decoding, poincare_embedding)]
+            
+
+        return dec_state, dec_outs, attns
+
+    def poincare_dist(self, u, e):
+        """
+        Args:
+            u (FloatTensor): batch of vectors
+                 ``(batch, vec_size)``.
+            e (FloatTensor): batch of vectors
+                 ``(vocab_size, vec_size)``.
+
+        Returns:
+            * outs: output from the transforming
+              ``(batch, 1)``.
+        """
+        #euclidean norm
+        squnorm = torch.sum(u * u, dim=-1)
+        res = []
+        for v in e.split(0):
+            sqvnorm = torch.sum(v * v, dim=-1)
+            sqdist = torch.sum(th.pow(u - v, 2), dim=-1)
+            #fraction
+            x = sqdist / ((1 - squnorm) * (1 - sqvnorm)) * 2 + 1
+            # arcosh
+            z = torch.sqrt(torch.pow(x, 2) - 1)
+            res.append(torch.log(x + z))
+
+        return torch.concat(res,-1)
+
+
+class SimplePoincareRNNDecoder(PoincareRNNDecoder):
+
+    def __init__(self, rnn_type, bidirectional_encoder, num_layers, hidden_size, attn_type="general", attn_func="softmax", coverage_attn=False, context_gate=None, copy_attn=False, dropout=0, embeddings=None, reuse_copy_attn=False, copy_attn_type="general"):
+        super().__init__(rnn_type, bidirectional_encoder, num_layers, hidden_size, attn_type, attn_func, coverage_attn, context_gate, copy_attn, dropout, embeddings, reuse_copy_attn, copy_attn_type)
+        self.lamda1 = torch.nn.parameter.Parameter(torch.randn(1))
+        self.lamda2 = torch.nn.parameter.Parameter(torch.randn(1))
+
+    def _run_forward_pass(self, tgt, memory_bank, memory_lengths=None):
+        """
+        See StdRNNDecoder._run_forward_pass() for description
+        of arguments and return values.
+        """
+        # Additional args check.
+        input_feed = self.state["input_feed"].squeeze(0)
+        input_feed_batch, _ = input_feed.size()
+        _, tgt_batch, _ = tgt.size()
+        aeq(tgt_batch, input_feed_batch)
+        # END Additional args check.
+
+        dec_outs = []
+        attns = {}
+
+        emb = self.embeddings(tgt)
+        assert emb.dim() == 3  # len x batch x embedding_dim
+
+        dec_state = self.state["hidden"]
+
+        # Input feed concatenates hidden state with
+        # input at every time step.
+        context_emb = torch.zeros([emb.shape[0],emb.shape[2]])
+        torch.tensor
+        for i,emb_t in enumerate(emb.split(1)):
+            context_emb = context_emb.squeeze(0)
+            context_emb = context_emb + emb_t
+            if i > self.context_window:
+                context_emb = context_emb - emb[:,i-self.context_window-1,:]
+            
+            poincare_state = self.poincare_map(dec_state)
+            poincare_decoding = self.poincare_map(context_emb)
+            poincare_embedding =  self.poincare_emb_map(self.embeddings.word_lut.weight)
+            
+            dec_out = self.lamda1 * self.poincare_dist(poincare_state, poincare_embedding) +\
+            self.lamda2 * self.poincare_dist(poincare_decoding, poincare_embedding)
+            dec_outs += [dec_out]
+        return dec_state, dec_outs, attns
+
+
+class PoincareReparametrize(nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super().__init__()
+        self.phi_dir = nn.Linear(in_dim,out_dim)
+        self.phi_norm = nn.Linear(in_dim,1)
+    # x: [batch_]
+    def forward(x):
+        """
+        Args:
+            x (FloatTensor): batch of vectors
+                 ``(batch, vec_size)``.
+
+        Returns:
+            * outs: output from the transforming
+              ``(batch, out_dim)``.
+        """
+        v_bar  = self.phi_dir(x)
+        p_bar = self.phi_norm(x)
+        v = v_bar / torch.norm(v_bar, dim = 0) 
+        p = nn.functional.sigmoid(p_bar)
+
+        return p*v
