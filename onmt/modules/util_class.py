@@ -46,3 +46,54 @@ class Cast(nn.Module):
 
     def forward(self, x):
         return x.to(self._dtype)
+
+
+class PoincareReparametrize(nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super().__init__()
+        self.phi_dir = nn.Linear(in_dim,out_dim)
+        self.phi_norm = nn.Linear(in_dim,1)
+    # x: [batch_]
+    def forward(self, x):
+        """
+        Args:
+            x (FloatTensor): batch of vectors
+                 ``(batch, vec_size)``.
+
+        Returns:
+            * outs: output from the transforming
+              ``(batch, out_dim)``.
+        """
+        v_bar  = self.phi_dir(x)
+        p_bar = self.phi_norm(x)
+        v = v_bar / torch.norm(v_bar, dim = 0) 
+        p = nn.functional.sigmoid(p_bar)
+
+        return p*v
+
+    @staticmethod
+    def poincare_dist(u, e):
+        """
+        Args:
+            u (FloatTensor): batch of vectors
+                 ``(batch, vec_size)``.
+            e (FloatTensor): batch of vectors
+                 ``(vocab_size, vec_size)``.
+
+        Returns:
+            * outs: output from the transforming
+              ``(batch, 1)``.
+        """
+        #euclidean norm
+        sqvnorm = torch.sum(e * e, dim=-1)
+        res = []
+        for u_slice in u.split(1,0):
+            squnorm = torch.sum(u_slice * u_slice, dim=-1)
+            sqdist = torch.sum(torch.pow(u_slice - e, 2), dim=-1)
+            #fraction
+            x = sqdist / ((1 - squnorm) * (1 - sqvnorm)) * 2 + 1
+            # arcosh
+            z = torch.sqrt(torch.pow(x, 2) - 1)
+            res.append(torch.log(x + z))
+
+        return torch.stack(res,0)

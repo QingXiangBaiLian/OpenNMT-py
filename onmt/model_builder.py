@@ -14,6 +14,7 @@ from onmt.encoders import str2enc
 from onmt.decoders import str2dec
 
 from onmt.modules import Embeddings, VecEmbedding, CopyGenerator
+from onmt.modules.copy_generator import PoincareCopyGenerator
 from onmt.modules.util_class import Cast
 from onmt.utils.misc import use_gpu
 from onmt.utils.logging import logger
@@ -195,7 +196,12 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
         tgt_base_field = fields["tgt"].base_field
         vocab_size = len(tgt_base_field.vocab)
         pad_idx = tgt_base_field.vocab.stoi[tgt_base_field.pad_token]
-        generator = CopyGenerator(model_opt.dec_rnn_size, vocab_size, pad_idx)
+        if model_opt.generator_function == "poincareCG":
+            generator = PoincareCopyGenerator(model_opt.dec_rnn_size, decoder.embeddings.word_lut.weight)
+        elif model_opt.decoder_type in {"prnn", "sprnn"}:
+            raise ValueError("Not support copy generater for {}".format(model_opt.decoder_type))
+        else:
+            generator = CopyGenerator(model_opt.dec_rnn_size, vocab_size, pad_idx)
 
     # Load the model states from checkpoint or initialize them.
     if checkpoint is not None:
