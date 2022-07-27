@@ -550,10 +550,13 @@ class SimplePoincareRNNDecoder(PoincareRNNDecoder):
 
         # Input feed concatenates hidden state with
         # input at every time step.
-        context_emb = torch.zeros([emb.shape[1],emb.shape[2]])
-        torch.tensor
+        # context_emb = torch.zeros([emb.shape[1],emb.shape[2]])
+
         for i,emb_t in enumerate(emb.split(1)):
-            context_emb = context_emb + emb_t.squeeze(0)
+            if i == 0:
+                context_emb = emb_t.squeeze(0).clone()
+            else:
+                context_emb = context_emb + emb_t.squeeze(0)
             if i > self.context_window:
                 context_emb = context_emb - emb[i-self.context_window-1,:,:].squeeze(0)
             
