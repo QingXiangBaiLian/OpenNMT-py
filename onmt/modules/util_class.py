@@ -66,7 +66,7 @@ class PoincareReparametrize(nn.Module):
         """
         v_bar  = self.phi_dir(x)
         p_bar = self.phi_norm(x)
-        v = v_bar / torch.norm(v_bar, dim = 0) 
+        v = v_bar / torch.norm(v_bar, dim = -1).unsqueeze(-1)
         p = nn.functional.sigmoid(p_bar)
 
         return p*v
