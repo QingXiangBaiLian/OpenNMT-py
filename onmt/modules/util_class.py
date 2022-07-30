@@ -66,7 +66,7 @@ class PoincareReparametrize(nn.Module):
         """
         v_bar  = self.phi_dir(x)
         p_bar = self.phi_norm(x)
-        v = v_bar / torch.norm(v_bar, dim = 0) 
+        v = v_bar / torch.norm(v_bar, dim = -1).unsqueeze(-1)
         p = nn.functional.sigmoid(p_bar)
 
         return p*v
@@ -85,15 +85,15 @@ class PoincareReparametrize(nn.Module):
               ``(batch, 1)``.
         """
         #euclidean norm
-        sqvnorm = torch.sum(e * e, dim=-1)
+        squnorm = torch.sum(u * u, dim=-1)
         res = []
-        for u_slice in u.split(1,0):
-            squnorm = torch.sum(u_slice * u_slice, dim=-1)
-            sqdist = torch.sum(torch.pow(u_slice - e, 2), dim=-1)
+        for e_slice in e.split(1,0):
+            sqvnorm = torch.sum(e_slice * e_slice, dim=-1)
+            sqdist = torch.sum(torch.pow(u - e_slice, 2), dim=-1)
             #fraction
             x = sqdist / ((1 - squnorm) * (1 - sqvnorm)) * 2 + 1
             # arcosh
             z = torch.sqrt(torch.pow(x, 2) - 1)
             res.append(torch.log(x + z))
 
-        return torch.stack(res,0)
+        return torch.stack(res,1)
