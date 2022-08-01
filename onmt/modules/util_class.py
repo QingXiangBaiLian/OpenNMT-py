@@ -89,15 +89,15 @@ class PoincareReparametrize(nn.Module):
         #euclidean norm
         # sqvnorm = torch.sum(e * e, dim=-1)
         res = []
-        # for u_slice in u:
-        #     d = Distance.apply(u_slice, e)
-        #     res.append(d)
+        for u_slice in u:
+            d = Distance.apply(u_slice, e)
+            res.append(d)
  
         # for e_slice in e:
         #     d = Distance.apply(u, e_slice)
         #     res.append(d)
         # return torch.stack(res, 1)
-        for u_slice in u:
+        # for u_slice in u:
             # squnorm = torch.sum(u_slice * u_slice, dim=-1)
             # sqdist = torch.sum(torch.pow(u_slice - e, 2), dim=-1)
             # #fraction
@@ -105,12 +105,12 @@ class PoincareReparametrize(nn.Module):
             # # arcosh
             # z = torch.sqrt(torch.pow(x, 2) - 1)
             # d = torch.log(x + z)
-            d = []
-            for e_slice in e:
-                d0 = Distance.apply(u_slice, e_slice)
-                d.append(d0)
-            d = torch.stack(d, 0)
-            res.append(d)
+            # d = []
+            # for e_slice in e:
+            #     d0 = Distance.apply(u_slice, e_slice)
+            #     d.append(d0)
+            # d = torch.stack(d, 0)
+            # res.append(d)
 
         return torch.stack(res,0)
 
@@ -122,11 +122,11 @@ class Distance(Function):
         beta = (1 - sqnormv)
         z = 1 + 2 * sqdist / (alpha * beta)
         a = ((sqnormv - 2 * torch.sum(x * v, dim=-1) + 1) / torch.pow(alpha, 2))\
-            .unsqueeze(-1).expand_as(x)
-        a = a * x - v / alpha.unsqueeze(-1).expand_as(v)
+            .unsqueeze(-1)
+        a = a * x - v / alpha.unsqueeze(-1)
         z = torch.sqrt(torch.pow(z, 2) - 1)
         z = torch.clamp(z * beta, min=eps).unsqueeze(-1)
-        return 4 * a / z.expand_as(x)
+        return 4 * a / z
 
     @staticmethod
     def forward(ctx, u, v, eps = 1e-5):
