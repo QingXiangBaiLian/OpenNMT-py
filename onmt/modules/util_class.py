@@ -85,15 +85,15 @@ class PoincareReparametrize(nn.Module):
               ``(batch, 1)``.
         """
         #euclidean norm
-        squnorm = torch.sum(u * u, dim=-1)
+        sqvnorm = torch.sum(e * e, dim=-1)
         res = []
-        for e_slice in e.split(1,0):
-            sqvnorm = torch.sum(e_slice * e_slice, dim=-1)
-            sqdist = torch.sum(torch.pow(u - e_slice, 2), dim=-1)
+        for u_slice in u:
+            squnorm = torch.sum(u_slice * u_slice, dim=-1)
+            sqdist = torch.sum(torch.pow(u_slice - e, 2), dim=-1)
             #fraction
             x = sqdist / ((1 - squnorm) * (1 - sqvnorm)) * 2 + 1
             # arcosh
             z = torch.sqrt(torch.pow(x, 2) - 1)
             res.append(torch.log(x + z))
 
-        return torch.stack(res,1)
+        return torch.stack(res,0)
