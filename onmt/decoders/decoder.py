@@ -553,7 +553,7 @@ class SimplePoincareRNNDecoder(PoincareRNNDecoder):
         context_emb = torch.zeros([emb.shape[1],emb.shape[2]])
         for i,emb_t in enumerate(emb.split(1)):
             if i == 0:
-                context_emb = + emb_t.squeeze(0).clone().requires_grad_()
+                context_emb = emb_t.squeeze(0).clone().requires_grad_()
             else:
                 context_emb = context_emb + emb_t.squeeze(0)
             if i > self.context_window:
