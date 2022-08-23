@@ -15,7 +15,7 @@ from onmt.decoders import str2dec
 
 from onmt.modules import Embeddings, VecEmbedding, CopyGenerator
 from onmt.modules.copy_generator import PoincareCopyGenerator
-from onmt.modules.util_class import Cast
+from onmt.modules.util_class import Cast, PoincareGenerator
 from onmt.utils.misc import use_gpu
 from onmt.utils.logging import logger
 from onmt.utils.parse import ArgumentParser
@@ -179,7 +179,9 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
         else:
             gen_func = nn.LogSoftmax(dim=-1)
         if model_opt.decoder_type in {"prnn", "sprnn"}:
+            poincare_generator = PoincareGenerator(model_opt.dec_rnn_size, decoder.embeddings)
             generator = nn.Sequential(
+                poincare_generator,
             Cast(torch.float32),
             gen_func
             )

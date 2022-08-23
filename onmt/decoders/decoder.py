@@ -445,8 +445,8 @@ class PoincareRNNDecoder(InputFeedRNNDecoder):
 
     def __init__(self, rnn_type, bidirectional_encoder, num_layers, hidden_size, attn_type="general", attn_func="softmax", coverage_attn=False, context_gate=None, copy_attn=False, dropout=0, embeddings=None, reuse_copy_attn=False, copy_attn_type="general"):
         super().__init__(rnn_type, bidirectional_encoder, num_layers, hidden_size, attn_type, attn_func, coverage_attn, context_gate, copy_attn, dropout, embeddings, reuse_copy_attn, copy_attn_type)
-        self.poincare_map = PoincareReparametrize(self.hidden_size, self.embeddings.word_lut.weight.shape[1])
-        self.poincare_emb_map = PoincareReparametrize(self.embeddings.word_lut.weight.shape[1], self.embeddings.word_lut.weight.shape[1])
+        # self.poincare_map = PoincareReparametrize(self.hidden_size, self.embeddings.word_lut.weight.shape[1])
+        # self.poincare_emb_map = PoincareReparametrize(self.embeddings.word_lut.weight.shape[1], self.embeddings.word_lut.weight.shape[1])
         self.context_window = 6
 
     def _run_forward_pass(self, tgt, memory_bank, memory_lengths=None):
@@ -511,11 +511,11 @@ class PoincareRNNDecoder(InputFeedRNNDecoder):
             elif self._reuse_copy_attn:
                 attns["copy"] = attns["std"]
             
-            poincare_decoding = self.poincare_map(decoder_output)
-            poincare_embedding =  self.poincare_emb_map(self.embeddings.word_lut.weight)
+            # poincare_decoding = self.poincare_map(decoder_output)
+            # poincare_embedding =  self.poincare_emb_map(self.embeddings.word_lut.weight)
             
-            dec_outs += [PoincareReparametrize.poincare_dist(poincare_decoding, poincare_embedding)]
-            
+            # dec_outs += [PoincareReparametrize.poincare_dist(poincare_decoding, poincare_embedding)]
+            dec_outs += [torch.hstack([dec_state[0][-1], decoder_output])]            
 
         return dec_state, dec_outs, attns
 
@@ -559,11 +559,12 @@ class SimplePoincareRNNDecoder(PoincareRNNDecoder):
             if i > self.context_window:
                 context_emb = context_emb - emb[i-self.context_window-1,:,:].squeeze(0)
             
-            poincare_state = self.poincare_map(dec_state[0][-1])
-            poincare_decoding = self.poincare_emb_map(context_emb)
-            poincare_embedding =  self.poincare_emb_map(self.embeddings.word_lut.weight)
+            # poincare_state = self.poincare_map(dec_state[0][-1])
+            # poincare_decoding = self.poincare_emb_map(context_emb)
+            # poincare_embedding =  self.poincare_emb_map(self.embeddings.word_lut.weight)
             
-            dec_out = self.lamda1 * PoincareReparametrize.poincare_dist(poincare_state, poincare_embedding) +\
-            self.lamda2 * PoincareReparametrize.poincare_dist(poincare_decoding, poincare_embedding)
+            # dec_out = self.lamda1 * PoincareReparametrize.poincare_dist(poincare_state, poincare_embedding) +\
+            # self.lamda2 * PoincareReparametrize.poincare_dist(poincare_decoding, poincare_embedding)
+            dec_out = torch.hstack([dec_state[0][-1], context_emb])
             dec_outs += [dec_out]
         return dec_state, dec_outs, attns

@@ -1,0 +1,50 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "OpenNMT Train",
+            "type": "python",
+            "request": "launch",
+            "program": "onmt/bin/train.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {"PYTHONPATH": "${cwd}"},
+            "args": [
+                "--encoder_type", "brnn",
+                "--decoder_type", "sprnn",
+                "--rnn_type", "LSTM",
+                "--global_attention", "general",
+                "--global_attention_function", "softmax",
+                "--generator_function", "softmax",
+                "--copy_attn_type", "general",
+                // "--copy_attn",
+                "--seed", "1",
+                "--optim", "adam",
+                "--learning_rate", "0.001",
+                "--early_stopping", "2",
+                "--batch_size", "64",
+                "--valid_batch_size", "8",
+                "--valid_steps", "1745",
+                "--save_checkpoint_steps", "1745",
+                "--data", "/home/xuchao/project/sm/data/output/onmt_binarized_data/data",
+                "--pre_word_vecs_enc", "/home/xuchao/project/sm/data/output/onmt_embeddings/embeddings.enc.pt",
+                "--pre_word_vecs_dec", "/home/xuchao/project/sm/data/output/onmt_embeddings/embeddings.dec.pt",
+                "--word_vec_size", "300",
+                // "--word_vec_size", "100",
+                "--attention_dropout", "0",
+                "--dropout", "0.5",
+                "--layers", "2",
+                "--rnn_size", "384",
+                // "--rnn_size", "128",
+                "--gpu_ranks", "0",
+                "--world_size", "1",
+                "--save_model", "/home/xuchao/project/sm/data/output/onmt_models/checkpoint",
+                "--tensorboard",
+                "--tensorboard_log_dir", "./data/log"
+            ]
+        }
+    ]
+}

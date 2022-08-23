@@ -147,3 +147,24 @@ class Distance(Function):
         gu = Distance.grad(u, v, squnorm, sqvnorm, sqdist, ctx.eps)
         gv = Distance.grad(v, u, sqvnorm, squnorm, sqdist, ctx.eps)
         return g.expand_as(gu) * gu, g.expand_as(gv) * gv, None
+
+
+class PoincareGenerator(nn.Module):
+    def __init__(self, hidden_size, embeddings):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.embeddings = embeddings
+        self.poincare_map = PoincareReparametrize(self.hidden_size, self.embeddings.word_lut.weight.shape[1])
+        self.poincare_emb_map = PoincareReparametrize(self.embeddings.word_lut.weight.shape[1], self.embeddings.word_lut.weight.shape[1])
+        torch.manual_seed(123)
+        self.lamda1 = torch.nn.parameter.Parameter(torch.randn(1))
+        self.lamda2 = torch.nn.parameter.Parameter(torch.randn(1))
+    # x: [batch_]
+    def forward(self, x):
+        dec_state, context_emb = torch.split(x, [self.hidden_size, x.shape[-1]-self.hidden_size], -1)
+        poincare_state = self.poincare_map(dec_state)
+        poincare_decoding = self.poincare_emb_map(context_emb)
+        poincare_embedding =  self.poincare_emb_map(self.embeddings.word_lut.weight)
+        
+        return self.lamda1 * PoincareReparametrize.poincare_dist(poincare_state, poincare_embedding) +\
+        self.lamda2 * PoincareReparametrize.poincare_dist(poincare_decoding, poincare_embedding)
